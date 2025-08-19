@@ -1,0 +1,54 @@
+services:
+  db:
+    image: postgres
+    container_name: todo_postgres
+    env_file:
+      - src/.env
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data/
+
+  todo_service:
+    container_name: todo_service
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+    env_file:
+      - src/.env
+    command: bash -c "uv run alembic upgrade head && sleep 20s && uv run uvicorn app:app --host 0.0.0.0 --port 8000"
+    build: .
+
+  todo_tests:
+    container_name: todo_tests
+    depends_on:
+      - todo_service
+    command: bash -c "sleep 30 && cd ../ && uv run pytest"
+    build: .
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    depends_on:
+      - todo_service
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+volumes:
+  pg_data:
+  grafana_data:
+    
